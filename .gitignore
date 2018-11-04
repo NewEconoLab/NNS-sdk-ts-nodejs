@@ -1,0 +1,17 @@
+# Globally ignored folder names
+node_modules
+coverage
+.nyc_output
+build
+/lib/
+
+# Logs
+*.log
+
+# IDE specific
+/.vscode
+.idea
+
+# Package stuff
+packages/**/lib
+packages/**/dist

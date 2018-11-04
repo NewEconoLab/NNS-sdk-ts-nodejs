@@ -1,0 +1,51 @@
+{
+  "name": "nns-sdk-ts-nodejs",
+  "version": "1.0.0",
+  "description": "An SDK for the NNS contract methods.",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "tslint packages/**/src/**/*.ts packages/**/__tests__/**/*.ts packages/**/__integration__/**/*.ts",
+    "precommit": "yarn lint && yarn pretty",
+    "prestart": "yarn build && yarn dist",
+    "pretty": "prettier --write --loglevel=warn \"**/{src,__{tests,integration}__}/**/*.ts\"",
+    "start": "jest --watch",
+    "test": "jest",
+    "test:integration": "jest /packages/.*/__integration__/.*",
+    "test:unit": "jest /packages/.*/__tests__/.*"
+  },
+  "devDependencies": {
+    "jest": "^23.6.0",
+    "@types/jest": "^23.3.1",
+    "cross-env": "^5.2.0",
+    "jest-junit": "^5.1.0",
+    "jest-watch-typeahead": "^0.2.0",
+    "prettier": "^1.14.0",
+    "ts-jest": "^23.0.1",
+    "tslint": "^5.11.0",
+    "tslint-config-prettier": "^1.14.0",
+    "typescript": "^3.0.1",
+    "@cityofzion/neon-core": "^4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NewEconoLab/NNS-sdk-ts-nodejs.git"
+  },
+  "workspaces": [
+    "."
+  ],
+  "keywords": [
+    "NNS",
+    "NEO",
+    "NeoName"
+  ],
+  "author": "Mathias Enzensberger",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/NewEconoLab/NNS-sdk-ts-nodejs/issues"
+  },
+  "homepage": "https://github.com/NewEconoLab/NNS-sdk-ts-nodejs#readme",
+  "dependencies": {
+    "@types/node": "^10.12.2"
+  }
+}
