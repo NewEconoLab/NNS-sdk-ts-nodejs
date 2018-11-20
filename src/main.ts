@@ -1,115 +1,125 @@
-import { logging, rpc, sc, u, wallet } from "@cityofzion/neon-core";
-import * as core from "./core";
+import { ThinNeo, Neo } from "nel-thinsdk-ts";
+import { Consts, Result } from "./consts";
+import { www }from "./tools/wwwtool";
+import * as tools from "./tools/tools";
 
-export async function resolveDomain(
-  url: string,
-  contract: string,
-  domain: string,
-  tld: string
-): Promise<string> {
-  const protocol = {
-    type: "String",
-    value: "addr"
-  };
 
-  const empty = {
-    type: "String",
-    value: ""
-  };
+export async function setResolveData(domain: string, str: string, resolve: string, address: string, wif: string) {
+    let hash = ThinNeo.Helper.GetPublicKeyScriptHash_FromAddress(address)
+    let hashstr = Neo.Func.toHexString(hash.reverse());
+    let arr = domain.split(".");
+    let nnshash: Neo.Uint256 = nameHashArray(arr);
+    var scriptaddress = Neo.Func.hexToBytes(resolve);
 
-  const tldRegEx = ".".concat(tld).concat("$");
-  const regExp = new RegExp(tldRegEx);
-
-  const subdomain = domain.replace(regExp, "");
-  const hashSubdomain = u.sha256(u.str2hexstring(subdomain));
-  const hashDomain = u.sha256(u.str2hexstring(tld));
-
-  const hashName = u.sha256(hashSubdomain.concat(hashDomain));
-  const parsedName = sc.ContractParam.byteArray(hashName, "name");
-
-  const args = [protocol, parsedName, empty];
-
-  const response = await core.callContract(url, domain, contract, "resolve", args);
-
-  return response;
+    var sb = new ThinNeo.ScriptBuilder();
+    let random_uint8 = Neo.Cryptography.RandomNumberGenerator.getRandomValues<Uint8Array>(new Uint8Array(32));
+    let random_int = Neo.BigInteger.fromUint8Array(random_uint8);
+    sb.EmitPushNumber(random_int);
+    sb.Emit(ThinNeo.OpCode.DROP);
+    sb.EmitParamJson([
+        "(hex160)" + hashstr,
+        "(hex256)" + nnshash.toString(),
+        "(str)",
+        "(str)addr",
+        "(str)" + str
+    ]);
+    sb.EmitPushString("setResolverData");
+    sb.EmitAppCall(scriptaddress.reverse());
+    var data = sb.ToArray();
+    let res = await tools.contractInvokeTrans_attributes(data, address, wif);
+    return res;
 }
 
-export async function getNameHash(
-  url: string,
-  contract: string,
-  domain: string,
-  tld: string
-): Promise<string> {
-  const tldRegEx = ".".concat(tld).concat("$");
-  const regExp = new RegExp(tldRegEx);
+export async function resolveData(domain: string) {
+    var scriptaddress = Consts.baseContract;
+    let arr = domain.split(".");
+    let nnshash = nameHashArray(arr);
+    let nnshashstr = nnshash;
 
-  const subdomain = domain.replace(regExp, "");
+    var sb = new ThinNeo.ScriptBuilder();
+    sb.EmitParamJson([
+        "(str)addr",
+        "(hex256)" + nnshashstr,
+        "(str)" + ""
+    ]);
+    sb.EmitPushString("resolve");
+    sb.EmitAppCall(scriptaddress);
+    var data = sb.ToArray();
+    let res = await www.rpc_getInvokescript(data);
+    let addr = "";
 
-  const args = [subdomain];
-
-  const response = await core.callContract(url, domain, contract, "nameHash", args);
-
-  return response;
+    try
+    {
+        var state = res.state as string;
+        if (state.includes("HALT, BREAK")) {
+            var stack = res.stack as any[];
+            if (stack[ 0 ].type == "ByteArray") {
+                if (stack[ 0 ].value as string != "00") {
+                    let value = Neo.Func.hextoBytes(stack[ 0 ].value as string);
+                    addr = ThinNeo.Helper.Bytes2String(value);
+                }
+            }
+        }
+    }
+    catch (e)
+    {
+        console.log(e);
+    }
+    return addr;
 }
 
-export async function setResolver(
-  url: string,
-  contract: string,
-  domain: string,
-  tld: string,
-  resolver: string,
-  address: string
-): Promise<string> {
-  const protocol = {
-    type: "String",
-    value: "addr"
-  };
 
-  const ownerHash = wallet.getScriptHashFromAddress(address);
-  const tldRegEx = ".".concat(tld).concat("$");
-  const regExp = new RegExp(tldRegEx);
-  const subdomain = domain.replace(regExp, "");
-  const hashSubdomain = u.sha256(u.str2hexstring(subdomain));
-  const hashDomain = u.sha256(u.str2hexstring(tld));
-  const hashName = u.sha256(hashSubdomain.concat(hashDomain));
-
-  const owner = sc.ContractParam.byteArray(ownerHash, "owner");
-  const fullhash = sc.ContractParam.byteArray(hashName, "fullhash");
-  const resolverArg = sc.ContractParam.byteArray(resolver, "resolver");
-
-  const args = [owner, fullhash, resolverArg];
-
-  const response = await core.callContract(
-    url,
-    domain,
-    contract,
-    "owner_SetResolver",
-    args
-  );
-
-  return response;
+export function nameHash(domain: string): Neo.Uint256 {
+    var domain_bytes = ThinNeo.Helper.String2Bytes(domain);
+    var hashd = Neo.Cryptography.Sha256.computeHash(domain_bytes);
+    return new Neo.Uint256(hashd);
 }
 
-export async function setAddress(
-  url: string,
-  contract: string,
-  domain: string,
-  tld: string
-): Promise<string> {
-  const tldRegEx = ".".concat(tld).concat("$");
-  const regExp = new RegExp(tldRegEx);
+export function nameHashSub(roothash: Neo.Uint256, subdomain: string): Neo.Uint256 {
+    var bs: Uint8Array = ThinNeo.Helper.String2Bytes(subdomain);
+    if (bs.length == 0)
+            return roothash;
+    
+    var domain = Neo.Cryptography.Sha256.computeHash(bs);
+    var domain_bytes = new Uint8Array(domain);
+    var domainUint8arry = Neo.Func.concat(domain_bytes, (new Uint8Array(roothash.bits.buffer)));
+    
+    var sub = Neo.Cryptography.Sha256.computeHash(domainUint8arry);
+    return new Neo.Uint256(sub);
+}
 
-  const subdomain = domain.replace(regExp, "");
+export function nameHashArray(domainarray: string[]): Neo.Uint256 {
+    domainarray.reverse();
+    var hash: Neo.Uint256 = nameHash(domainarray[ 0 ]);
+    for (var i = 1; i < domainarray.length; i++)
+    {
+        hash = nameHashSub(hash, domainarray[ i ]);
+    }
+    return hash;
+}
 
-  const args = [subdomain];
+export async function owner_setResolver(domain: string, resolverhash: Uint8Array, addr: string, wif: string): Promise<Result> {
 
-  const response = await core.callContract(
-    url,
-    domain,
-    contract,
-    "setResolverData",
-    args
-  );
+    let hash = ThinNeo.Helper.GetPublicKeyScriptHash_FromAddress(addr);
+    let hashstr = Neo.Func.toHexString(hash.reverse());
+    let arr = domain.split(".");
+    let nnshash: Neo.Uint256 = nameHashArray(arr);
+    let resolvestr = Neo.Func.toHexString(resolverhash.reverse());
+    var scriptaddress = Consts.baseContract;
 
-  return response;
+    var sb = new ThinNeo.ScriptBuilder();
+    let random_uint8 = Neo.Cryptography.RandomNumberGenerator.getRandomValues<Uint8Array>(new Uint8Array(32));
+    let random_int = Neo.BigInteger.fromUint8Array(random_uint8);
+    sb.EmitPushNumber(random_int);
+    sb.Emit(ThinNeo.OpCode.DROP);
+    sb.EmitParamJson([
+        "(hex160)" + hashstr,
+        "(hex256)" + nnshash.toString(),
+        "(hex160)" + resolvestr ]);
+    sb.EmitPushString("owner_SetResolver");
+    sb.EmitAppCall(scriptaddress);
+    var data = sb.ToArray();
+
+    let res = await tools.contractInvokeTrans_attributes(data, addr, wif);
+    return res;
 }
