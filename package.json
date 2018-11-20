@@ -46,6 +46,8 @@
   },
   "homepage": "https://github.com/NewEconoLab/NNS-sdk-ts-nodejs#readme",
   "dependencies": {
-    "@types/node": "^10.12.2"
+    "@types/node": "^10.12.2",
+    "nel-neo-thinsdk": "0.0.9",
+    "typescript-require": "^0.2.10"
   }
 }
